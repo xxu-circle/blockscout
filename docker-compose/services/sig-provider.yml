@@ -7,3 +7,11 @@ services:
     platform: linux/amd64
     restart: always
     container_name: 'sig-provider'
+    volumes:
+      - ${HOME}/.certs/zscaler_root_ca.pem:/tmp/zscaler_root_ca.pem:ro
+    environment:
+      - CURL_CA_BUNDLE=/tmp/zscaler_root_ca.pem
+      - REQUESTS_CA_BUNDLE=/tmp/zscaler_root_ca.pem
+      - CERT_PATH=/tmp/zscaler_root_ca.pem
+      - SSL_CERT_FILE=/tmp/zscaler_root_ca.pem
+      - NODE_EXTRA_CA_CERTS=/tmp/zscaler_root_ca.pem

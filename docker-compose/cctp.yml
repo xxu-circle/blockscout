@@ -1,0 +1,83 @@
+# ETH:
+# docker compose -f ./cctp.yml up -d
+# ARB:
+# PORT=8501 docker compose -f ./cctp.yml up -d
+
+volumes:
+  db-data:
+
+services:
+  redis-db:
+    extends:
+      file: ./services/redis.yml
+      service: redis-db
+    volumes: []
+
+  db-init:
+    extends:
+      file: ./services/db.yml
+      service: db-init
+    volumes:
+      - db-data:/var/lib/postgresql/data
+
+  db:
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    extends:
+      file: ./services/db.yml
+      service: db
+    volumes:
+      - db-data:/var/lib/postgresql/data
+
+  backend:
+    depends_on:
+      - db
+      - redis-db
+    extends:
+      file: ./services/backend.yml
+      service: backend
+    links:
+      - db:database
+    volumes: []
+    environment:
+      ETHEREUM_JSONRPC_VARIANT: 'ganache'
+      INDEXER_DISABLE_INTERNAL_TRANSACTIONS_FETCHER: 'true'
+      INDEXER_DISABLE_PENDING_TRANSACTIONS_FETCHER: 'true'
+      ETHEREUM_JSONRPC_HTTP_URL: http://host.docker.internal:${PORT:-8500}/
+      ETHEREUM_JSONRPC_TRACE_URL: http://host.docker.internal:${PORT:-8500}/
+      ETHEREUM_JSONRPC_WS_URL: ws://host.docker.internal:${PORT:-8500}/
+      MICROSERVICE_ACCOUNT_ABSTRACTION_ENABLED: 'false'
+      MICROSERVICE_VISUALIZE_SOL2UML_ENABLED: 'false'
+      INDEXER_INTERNAL_TRANSACTIONS_TRACER_TYPE: 'opcode'
+
+  sig-provider:
+    extends:
+      file: ./services/sig-provider.yml
+      service: sig-provider
+
+  frontend:
+    depends_on:
+      - backend
+    extends:
+      file: ./services/frontend.yml
+      service: frontend
+    environment:
+      NEXT_PUBLIC_NETWORK_RPC_URL: http://host.docker.internal:${PORT:-8500}/
+      NEXT_PUBLIC_HAS_USER_OPS: 'false'
+      NEXT_PUBLIC_STATS_API_HOST:
+      NEXT_PUBLIC_APP_HOST: "localhost"
+      NEXT_PUBLIC_API_HOST: "localhost"
+
+  proxy:
+    depends_on:
+      - backend
+      - frontend
+    extends:
+      file: ./services/nginx-explorer.yml
+      service: proxy
+    volumes:
+      - "./proxy/explorer.conf.template:/etc/nginx/templates/default.conf.template"
+    environment:
+      BACK_PROXY_PASS: http://backend:4000
+      FRONT_PROXY_PASS: http://frontend:3000
